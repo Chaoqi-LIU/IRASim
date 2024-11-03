@@ -188,7 +188,17 @@ def main(args):
         seg_action = actions
         start_image = start_image.unsqueeze(0).unsqueeze(0)
         seg_action = seg_action.unsqueeze(0)
-        seg_video, seg_latents = generate_single_video(args, start_image , seg_action, device, vae, model)
+
+        # measure time
+        total_time = 0
+        num_run = 3
+        for _ in range(num_run):
+            start = time.time()
+            seg_video, seg_latents = generate_single_video(args, start_image , seg_action, device, vae, model)
+            end = time.time()
+            total_time += end - start
+        print(f"Average time for generating video {seg_video.shape=}: {total_time / num_run:.2f}s")
+
         seg_video = seg_video.squeeze()
         seg_latents = seg_latents.squeeze()
         start_image = seg_latents[-1].clone()
