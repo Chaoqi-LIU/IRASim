@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import cv2
 import imageio
 import os
 import argparse
@@ -30,6 +30,40 @@ from models import get_models
 from dataset import get_dataset
 from util import (get_args, requires_grad)
 from evaluate.generate_short_video import generate_single_video
+
+
+def resize_image(image, resize=True):
+    MAX_RES = 1024
+
+    # convert to array
+    image = np.asarray(image)
+    h, w = image.shape[:2]
+    if h > MAX_RES or w > MAX_RES:
+        if h < w:
+            new_h, new_w = int(MAX_RES * w / h), MAX_RES
+        else:
+            new_h, new_w = MAX_RES, int(MAX_RES * h / w)
+        image = cv2.resize(image, (new_w, new_h))
+
+    if resize:
+        # resize the shorter side to 256 and then do a center crop
+        h, w = image.shape[:2]
+        if h < w:
+            new_h, new_w = 256, int(256 * w / h)
+        else:
+            new_h, new_w = int(256 * h / w), 256
+        image = cv2.resize(image, (new_w, new_h))
+
+        h, w = image.shape[:2]
+        crop_h, crop_w = 256, 256
+        start_h = (h - crop_h) // 2
+        start_w = (w - crop_w) // 2
+        image = image[start_h:start_h + crop_h, start_w:start_w + crop_w]
+    return image
+
+
+
+
 
 def create_arrow_image(direction='w', size=50, color=(255, 0, 0)):
     """
@@ -128,36 +162,51 @@ def main(args):
     # print(args)
     _,val_dataset = get_dataset(args)
 
-    left_scale,right_scale = 0.5,-0.5
-    up_scale, down_scale = 0.5, -0.5
+    left_scale, right_scale, up_scale, down_scale = np.array([1, -1, 1, -1]) * 1.0
 
-    latent_video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_latent_videos/val_sample_latent_videos/000030_0_0.pt'
-    with open(latent_video_path, 'rb') as f:
-        latent_video = torch.load(f)
+    # latent_video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_latent_videos/val_sample_latent_videos/000030_0_0.pt'
+    # with open(latent_video_path, 'rb') as f:
+    #     latent_video = torch.load(f)
     
-    video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_videos/val_sample_videos/000030_0_0.mp4'
-    video_reader = imageio.get_reader(video_path)
-    video_tensor = []
-    for frame in video_reader:
-        frame_tensor = torch.tensor(frame)
-        video_tensor.append(frame_tensor)
-    video_reader.close()
-    video_tensor = torch.stack(video_tensor)
+    # video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_videos/val_sample_videos/000030_0_0.mp4'
+    # video_reader = imageio.get_reader(video_path)
+    # video_tensor = []
+    # for frame in video_reader:
+    #     frame_tensor = torch.tensor(frame)
+    #     video_tensor.append(frame_tensor)
+    # video_reader.close()
+    # video_tensor = torch.stack(video_tensor)
 
     game_dir = 'application/languagetable_game'
     os.makedirs(game_dir,exist_ok=True)
     print(f'Game Dir {game_dir} !')
 
     start_idx = 0
-    start_image = latent_video[start_idx]
-    video_tensor = video_tensor[start_idx:]
+    # start_image = latent_video[start_idx]
+    # video_tensor = video_tensor[start_idx:]
+    # print(f"{start_image.shape=}")
     seg_idx = 0
+
+
+    my_prompt_image = imageio.imread('prompt_06.png')
+    my_prompt_image = cv2.resize(my_prompt_image, (512, 288))   # (H, W, C)
+    my_prompt_image = my_prompt_image.transpose(2, 0, 1)    # (C, H, W)
+    my_prompt_image = my_prompt_image[np.newaxis]
+    my_prompt_image = torch.from_numpy(my_prompt_image)
+    print(f"{my_prompt_image.shape=}")
+
+    frame_for_encoding = ((my_prompt_image / 255) * 2 - 1).float().to(device)
+    latent = vae.encode(frame_for_encoding
+            ).latent_dist.sample().mul_(vae.config.scaling_factor).squeeze(0)
+    start_image = latent
+    print(f"{latent.shape=}")
+
     
-    video_tensor = video_tensor
-    video_tensor = video_tensor.permute(0, 3, 1, 2)
+    video_tensor = my_prompt_image
+    # video_tensor = video_tensor.permute(0, 3, 1, 2)
     video_tensor = val_dataset.resize_preprocess(video_tensor)
     video_tensor = video_tensor.permute(0, 2, 3, 1)
-    imageio.imwrite(os.path.join(game_dir,'first_image.png'), video_tensor[0].numpy())
+    imageio.imwrite(os.path.join(game_dir,'first_image.png'), video_tensor[0].cpu().numpy())
     seg_video_list = [video_tensor[0:1].numpy()] # TODO
     while True:
         # action = ann['actions']
@@ -201,6 +250,14 @@ def main(args):
         t_videos = t_videos.numpy()
         seg_video_list.append(t_videos[1:])
         all_video = np.concatenate(seg_video_list,axis=0)
+
+        # resize the video
+        all_video = np.stack([
+            resize_image(frame)
+            for frame in all_video
+        ])
+        print(f"{all_video.shape=}")
+
         output_video_path = os.path.join(game_dir,f'all_{seg_idx}-th.mp4')
         writer = get_writer(output_video_path, fps=4)
         for frame in all_video:
