@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import os
-import math
 import torch
 import logging
 import random
@@ -32,9 +31,6 @@ from omegaconf import OmegaConf
 
 from diffusers.utils import is_bs4_available, is_ftfy_available
 
-import html
-import re
-import urllib.parse as ul
 
 if is_bs4_available():
     from bs4 import BeautifulSoup

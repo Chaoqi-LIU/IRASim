@@ -80,15 +80,15 @@ def add_arrows_to_video(video_np, save_path, actions):
 def read_actions_from_keyboard():
     valid_actions = ['w', 'a', 's', 'd', ' ']
     actions = []
-
-    while len(actions) < 15:
-        input_actions = input(f"Please enter actions (remaining {15 - len(actions)}): ").lower()
+    num_actions = 15
+    while len(actions) < num_actions:
+        input_actions = input(f"Please enter actions (remaining {num_actions - len(actions)}): ").lower()
         for action in input_actions:
-            if action in valid_actions and len(actions) < 15:
+            if action in valid_actions and len(actions) < num_actions:
                 actions.append(action)
         
-        if len(actions) < 15:
-            print(f"Not enough actions. Please enter the remaining {15 - len(actions)} actions.")
+        if len(actions) < num_actions:
+            print(f"Not enough actions. Please enter the remaining {num_actions - len(actions)} actions.")
     return actions
 
 def main(args):
@@ -126,23 +126,15 @@ def main(args):
     model.eval()
 
     # print(args)
-    train_dataset,val_dataset = get_dataset(args)
+    _,val_dataset = get_dataset(args)
 
     left_scale,right_scale = 0.5,-0.5
     up_scale, down_scale = 0.5, -0.5
 
-    # ann_file = val_dataset.ann_files[0]
-
-    # with open(ann_file, "rb") as f:
-    #     ann = json.load(f)
-    # latent_video_path = os.path.join(args.video_path,ann['latent_video_path'])
     latent_video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_latent_videos/val_sample_latent_videos/000030_0_0.pt'
     with open(latent_video_path, 'rb') as f:
         latent_video = torch.load(f)
-        # print(f"{type(latent_video)=}")
-        # latent_video = latent_video['obs']
     
-    # video_path = os.path.join(args.video_path, ann['video_path'])
     video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_videos/val_sample_videos/000030_0_0.mp4'
     video_reader = imageio.get_reader(video_path)
     video_tensor = []
@@ -191,9 +183,10 @@ def main(args):
 
         # measure time
         total_time = 0
-        num_run = 3
+        num_run = 1
         for _ in range(num_run):
             start = time.time()
+            print(f"{start_image.shape=}, {seg_action.shape=}")
             seg_video, seg_latents = generate_single_video(args, start_image , seg_action, device, vae, model)
             end = time.time()
             total_time += end - start
@@ -222,4 +215,5 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, default="./configs/evaluation/languagetable/frame_ada.yaml")
     args = parser.parse_args()
     args = get_args(args)
+    # args.num_frames = 2
     main(args)
