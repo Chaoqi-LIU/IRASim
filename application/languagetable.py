@@ -164,27 +164,10 @@ def main(args):
 
     left_scale, right_scale, up_scale, down_scale = np.array([1, -1, 1, -1]) * 1.0
 
-    # latent_video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_latent_videos/val_sample_latent_videos/000030_0_0.pt'
-    # with open(latent_video_path, 'rb') as f:
-    #     latent_video = torch.load(f)
-    
-    # video_path = 'robotdata/opensource_robotdata/languagetable/evaluation_videos/val_sample_videos/000030_0_0.mp4'
-    # video_reader = imageio.get_reader(video_path)
-    # video_tensor = []
-    # for frame in video_reader:
-    #     frame_tensor = torch.tensor(frame)
-    #     video_tensor.append(frame_tensor)
-    # video_reader.close()
-    # video_tensor = torch.stack(video_tensor)
-
     game_dir = 'application/languagetable_game'
     os.makedirs(game_dir,exist_ok=True)
     print(f'Game Dir {game_dir} !')
 
-    start_idx = 0
-    # start_image = latent_video[start_idx]
-    # video_tensor = video_tensor[start_idx:]
-    # print(f"{start_image.shape=}")
     seg_idx = 0
 
 
@@ -207,7 +190,9 @@ def main(args):
     video_tensor = val_dataset.resize_preprocess(video_tensor)
     video_tensor = video_tensor.permute(0, 2, 3, 1)
     imageio.imwrite(os.path.join(game_dir,'first_image.png'), video_tensor[0].cpu().numpy())
-    seg_video_list = [video_tensor[0:1].numpy()] # TODO
+    # seg_video_list = [video_tensor[0:1].numpy()] # TODO
+    seg_video_list = []
+    all_actions = []
     while True:
         # action = ann['actions']
         env_actions = read_actions_from_keyboard()
@@ -224,6 +209,7 @@ def main(args):
             else:
                 actions.append([0,0])
         print('Actions to be processed are ', ' '.join(env_actions))
+        all_actions.extend(env_actions)
         actions = torch.from_numpy(np.array(actions))
 
         seg_action = actions
@@ -251,18 +237,18 @@ def main(args):
         seg_video_list.append(t_videos[1:])
         all_video = np.concatenate(seg_video_list,axis=0)
 
-        # resize the video
-        all_video = np.stack([
-            resize_image(frame)
-            for frame in all_video
-        ])
-        print(f"{all_video.shape=}")
+        # # resize the video
+        # all_video = np.stack([
+        #     resize_image(frame)
+        #     for frame in all_video
+        # ])
 
         output_video_path = os.path.join(game_dir,f'all_{seg_idx}-th.mp4')
         writer = get_writer(output_video_path, fps=4)
         for frame in all_video:
             writer.append_data(frame)
         writer.close()
+        # add_arrows_to_video(all_video, output_video_path, all_actions)
         print(f'generate video: {output_video_path}')
         seg_idx += 1
     
